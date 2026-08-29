@@ -1,6 +1,6 @@
 {
   "name": "uixphuke-env-vault",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Production-focused encrypted environment secrets for Node.js applications.",
   "type": "module",
   "main": "./dist/index.js",
@@ -52,9 +52,9 @@
   "dependencies": {
     "@inquirer/password": "^5.2.0"
   },
- "overrides": {
-  "tsup": {
-    "esbuild": "0.28.2"
+  "overrides": {
+    "tsup": {
+      "esbuild": "0.28.2"
+    }
   }
-}
 }
