@@ -1,0 +1,307 @@
+# PRODUCTION BUILD PROMPT — ENV-VAULT
+
+You are a senior Node.js/TypeScript security engineer and open-source maintainer.
+
+Build the complete production-ready npm package `env-vault`, an encrypted secrets manager
+for Node.js applications. The goal is an easy developer experience for encrypting `.env`
+configuration into a versioned vault file that can be committed to source control, while
+the master password/key remains outside Git and is injected at deployment/runtime.
+
+## NON-NEGOTIABLE SECURITY RULES
+
+1. Do NOT invent cryptography.
+2. Use only well-established Node.js `node:crypto` primitives.
+3. Use authenticated encryption. The reference implementation uses AES-256-GCM.
+4. Derive password-based keys using scrypt with explicit, versioned parameters.
+5. Generate a fresh cryptographically secure random salt for every vault and a fresh nonce
+   for every encryption operation.
+6. Never reuse a nonce with the same encryption key.
+7. Authenticate ciphertext and reject modified vaults.
+8. Never log plaintext secret values, passwords, encryption keys, decrypted `.env` contents,
+   or sensitive command arguments.
+9. Do not write plaintext secrets to disk unless the user explicitly requests a decrypt
+   command. Runtime loading should decrypt in memory.
+10. Do not expose secrets to client-side bundles.
+11. Fail closed on authentication failure, malformed vaults, unsupported versions, unsafe
+    parameters, and missing passwords.
+12. Use atomic writes for vault files.
+13. Restrict sensitive file permissions where the platform supports them.
+14. Treat vault files as sensitive even though their contents are encrypted.
+15. Document the threat model and explicitly state what the package does NOT protect.
+16. Pin and review cryptographic format changes with versioned migrations.
+17. Never claim that a custom implementation is independently security-audited unless it is.
+18. Include security-focused tests for wrong passwords, tampering, corruption, nonce/salt
+    uniqueness, malformed input, key rotation, permission behavior, and secret leakage.
+19. Keep crypto implementation isolated from CLI/UI concerns.
+20. Before release, run typecheck, lint, tests, build, npm pack --dry-run, and npm audit.
+
+## TARGET STACK
+
+- Node.js >= 20
+- TypeScript
+- ESM
+- tsup
+- Vitest
+- ESLint
+- Prettier
+- No unnecessary runtime dependencies
+- Prefer Node built-ins for crypto, filesystem, child process, readline, path, etc.
+
+## REQUIRED PROJECT STRUCTURE
+
+Use exactly this high-level organization and complete every file:
+
+env-vault/
+├── src/
+│   ├── core/
+│   ├── vault/
+│   ├── env/
+│   ├── runtime/
+│   ├── security/
+│   ├── config/
+│   ├── errors/
+│   ├── utils/
+│   ├── index.ts
+│   └── cli/
+├── tests/
+├── docs/
+├── examples/
+├── .github/
+├── package.json
+├── tsconfig.json
+├── tsup.config.ts
+├── vitest.config.ts
+├── eslint.config.js
+├── prettier.config.js
+├── .gitignore
+├── .npmignore
+├── LICENSE
+├── README.md
+├── CHANGELOG.md
+└── SECURITY.md
+
+## CORE API
+
+Provide a minimal stable public API:
+
+- encrypt(plaintext, password)
+- decrypt(payload, password)
+- generateKey()
+- createVault(plaintext, password)
+- openVault(path, password)
+- readVault(path)
+- writeVault(path, vault)
+- loadSecrets(options)
+- runCommand(command, args)
+- parseEnv(input)
+- stringifyEnv(values)
+- rotateVault(path, oldPassword, newPassword)
+
+Keep internal modules private. Do not expose implementation details as public API.
+
+## VAULT FORMAT
+
+Use a versioned JSON envelope. At minimum:
+
+{
+  "format": "env-vault",
+  "version": 1,
+  "algorithm": "aes-256-gcm",
+  "kdf": "scrypt",
+  "salt": "...",
+  "nonce": "...",
+  "ciphertext": "...",
+  "tag": "...",
+  "kdfParams": {
+    "N": 16384,
+    "r": 8,
+    "p": 1
+  }
+}
+
+Validate every field before attempting decryption. Reject unsupported versions and invalid
+cryptographic parameter ranges. Keep the format forward-compatible.
+
+## ENV FILE BEHAVIOR
+
+Support normal `.env` patterns such as:
+
+KEY=value
+KEY="value with spaces"
+KEY='single quoted value'
+# comments
+export KEY=value
+
+Preserve values correctly during parse/stringify. Do not attempt to become a full shell parser.
+Clearly document supported syntax and limitations.
+
+## CLI
+
+Implement:
+
+env-vault init
+env-vault encrypt [input] [output]
+env-vault decrypt [input] [output]
+env-vault run -- <command> [args...]
+env-vault rotate
+env-vault status
+env-vault version
+
+The common workflow must be simple:
+
+npm install env-vault
+npx env-vault init
+npx env-vault encrypt
+npx env-vault run -- node server.js
+
+Support interactive passwords and ENV_VAULT_PASSWORD for automation. Prefer external CI/CD
+secret stores for the password. Never echo passwords.
+
+## RUNTIME
+
+`loadSecrets()` must:
+- read the vault
+- validate it
+- decrypt in memory
+- parse the environment
+- inject values into process.env
+- avoid overwriting existing variables by default
+- optionally support override
+- never print the decrypted contents
+
+`run` must use spawn with shell=false so user-provided command arguments are not accidentally
+interpreted by a shell.
+
+## KEY MANAGEMENT
+
+Implement:
+- secure random key generation
+- password provider abstraction
+- environment provider
+- key rotation
+- secure file permissions where practical
+- clear documentation for production key storage
+
+Do not pretend that JavaScript Buffer zeroization is a perfect secure-memory guarantee. Document
+its limitations honestly.
+
+## FILE SAFETY
+
+- Validate paths.
+- Use atomic vault writes.
+- Do not follow unsafe assumptions about symlinks or permissions.
+- Explain platform differences.
+- Avoid temporary plaintext files.
+- Never include secrets in error messages.
+
+## ERROR HANDLING
+
+Create typed errors:
+- EnvVaultError
+- InvalidVaultError
+- AuthenticationError
+- ConfigurationError
+- CryptoError
+
+Errors should be useful to developers but must not reveal secrets or cryptographic internals that
+make attacks easier.
+
+## TESTING
+
+Create unit, integration, and security tests.
+
+Minimum security tests:
+- successful encryption/decryption
+- wrong password
+- modified ciphertext
+- modified tag
+- modified salt/nonce
+- malformed JSON
+- unsupported version
+- invalid parameters
+- unique salt across encryptions
+- unique nonce across encryptions
+- runtime loading
+- no overwrite by default
+- optional overwrite
+- key rotation
+- atomic file write behavior
+- CLI command behavior
+- secret values never appear in logs/errors
+
+Add property-style tests where practical.
+
+## DOCUMENTATION
+
+README must explain:
+- what env-vault is
+- threat model
+- installation
+- 2-minute quick start
+- CLI reference
+- SDK reference
+- CI/CD usage
+- Docker usage
+- key management
+- key rotation
+- vault format
+- limitations
+- security reporting
+
+SECURITY.md must provide responsible disclosure guidance.
+
+## CI/CD
+
+Provide GitHub Actions for:
+- Node 20 and 22 CI
+- tests/typecheck/lint/build/package verification
+- npm audit
+- release publishing using an npm token/appropriate trusted publishing setup
+
+Do not place real secrets in workflows.
+
+## RELEASE QUALITY
+
+Before considering the implementation complete:
+1. `npm install`
+2. `npm run typecheck`
+3. `npm run lint`
+4. `npm test`
+5. `npm run build`
+6. `npm pack --dry-run`
+7. `npm audit --audit-level=high`
+
+Fix every failure.
+
+## IMPORTANT PRODUCT PRINCIPLE
+
+The package should make the secure path the easiest path.
+
+Bad API:
+encrypt(data, algorithm, iv, salt, key, options)
+
+Good API:
+await encrypt(data, password)
+
+Use secure defaults and hide cryptographic complexity from normal users.
+
+## FINAL QUALITY BAR
+
+This must look like a serious open-source security package:
+- clean architecture
+- minimal public API
+- strict TypeScript
+- comprehensive tests
+- no plaintext secret logging
+- deterministic/versioned vault format
+- safe errors
+- production documentation
+- CI
+- examples
+- changelog
+- license
+- security policy
+- npm-ready packaging
+
+Do not leave TODOs, placeholders, fake implementations, pseudocode, or empty files.
+Every required file must contain working code or meaningful documentation.
