@@ -1,0 +1,10 @@
+export { encrypt } from './core/encrypt.js';
+export type { EncryptedPayload } from './core/encrypt.js';
+export { decrypt } from './core/decrypt.js';
+export { generateKey } from './core/key-generation.js';
+export { createVault, openVault, readVault, writeVault } from './vault/vault.js';
+export { loadSecrets } from './runtime/load-secrets.js';
+export { runCommand } from './runtime/run-command.js';
+export { parseEnv } from './env/env-parser.js';
+export { stringifyEnv } from './env/env-writer.js';
+export { rotateVault } from './security/key-rotation.js';
